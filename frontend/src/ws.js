@@ -1,4 +1,4 @@
-const WS = import.meta.env.VITE_WS || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+const WS = 'wss://smartattend-backend-azmm.onrender.com'
 
 export function openLaptopWs(room, onBinary) {
   const ws = new WebSocket(`${WS}/ws/laptop/${room}`)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 
-const WS = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+const WS = 'wss://smartattend-backend-azmm.onrender.com'
 
 export default function MobileCapture() {
   const { room } = useParams()

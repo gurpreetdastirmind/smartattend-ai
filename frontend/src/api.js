@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API || ''
+const BASE = import.meta.env.VITE_API || 'https://smartattend-backend-azmm.onrender.com'
 
 export async function api(path, opts = {}) {
   const res = await fetch(BASE + path, opts)
