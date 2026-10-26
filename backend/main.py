@@ -182,6 +182,7 @@ async def ws_phone(ws: WebSocket, room: str):
             r.phone_ws = None
 
 @app.post("/api/room/{room}/create")
+@app.post("/api/room/create/{room}")
 def create_room(room: str | None = None):
     rid = room or uuid.uuid4().hex[:8]
     ROOMS.setdefault(rid, Room())
