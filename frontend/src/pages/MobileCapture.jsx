@@ -12,10 +12,13 @@ export default function MobileCapture() {
   const wsRef = useRef(null)
 
   // Open WebSocket
-  useEffect(() => {
+   useEffect(() => {
     const isEnroll = new URLSearchParams(window.location.search).get('type') === 'enroll'
-    const wsPath = isEnroll ? '/ws/enroll_phone' : '/ws/phone'
-    const ws = new WebSocket(`${WS}/ws/phone/${room}`)
+    
+    // Fix: Use the correct path variable here
+    const wsPath = isEnroll ? 'enroll_phone' : 'phone'
+    const ws = new WebSocket(`${WS}/ws/${wsPath}/${room}`)
+    
     ws.onopen = () => { setConnected(true); setStatus('Connected — ready to send') }
     ws.onclose = () => { setConnected(false); setStatus('Disconnected') }
     wsRef.current = ws
