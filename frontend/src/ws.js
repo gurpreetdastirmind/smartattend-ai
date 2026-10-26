@@ -27,3 +27,16 @@ export function openEnrollLaptopWs(room, onBinary) {
   ws.onclose = () => clearInterval(ping)
   return ws
 }
+
+export function openGroupEnrollLaptopWs(room, onBinary) {
+  const ws = new WebSocket(`${WS}/ws/group_laptop/${room}`)
+  ws.binaryType = 'blob'
+  ws.onmessage = (ev) => {
+    if (ev.data instanceof Blob) onBinary(ev.data)
+  }
+  const ping = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) ws.send('ping')
+  }, 15000)
+  ws.onclose = () => clearInterval(ping)
+  return ws
+}

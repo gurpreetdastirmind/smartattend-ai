@@ -5,32 +5,34 @@ const WS = 'wss://smartattend-backend-azmm.onrender.com'
 
 export default function MobileCapture() {
   const { room } = useParams()
-  const [facingMode, setFacingMode] = useState('environment') // 'environment' (back) or 'user' (front)
+  const [facingMode, setFacingMode] = useState('environment')
   const [status, setStatus] = useState('Starting camera…')
   const [connected, setConnected] = useState(false)
   const videoRef = useRef(null)
   const wsRef = useRef(null)
 
-  // Open WebSocket
-   useEffect(() => {
-    const isEnroll = new URLSearchParams(window.location.search).get('type') === 'enroll'
+  // ⬇️ THIS IS THE POSITION YOU ASKED FOR ⬇️
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const type = params.get('type')
     
-    // Fix: Use the correct path variable here
-    const wsPath = isEnroll ? 'enroll_phone' : 'phone'
+    let wsPath = 'phone' // default for attendance
+    if (type === 'enroll') wsPath = 'enroll_phone'
+    if (type === 'group_enroll') wsPath = 'group_phone'
+    
     const ws = new WebSocket(`${WS}/ws/${wsPath}/${room}`)
-    
     ws.onopen = () => { setConnected(true); setStatus('Connected — ready to send') }
     ws.onclose = () => { setConnected(false); setStatus('Disconnected') }
     wsRef.current = ws
     return () => ws.close()
   }, [room])
+  // ⬆️ END OF POSITION ⬆️
 
   // Camera setup (runs when facingMode changes)
   useEffect(() => {
     let currentStream = null
 
     const startCamera = async () => {
-      // Stop any existing video tracks before starting a new one
       if (videoRef.current && videoRef.current.srcObject) {
         const oldStream = videoRef.current.srcObject
         oldStream.getTracks().forEach(track => track.stop())
@@ -54,7 +56,6 @@ export default function MobileCapture() {
 
     startCamera()
 
-    // Cleanup when component unmounts or facingMode changes
     return () => {
       if (currentStream) {
         currentStream.getTracks().forEach(t => t.stop())

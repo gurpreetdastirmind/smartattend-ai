@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse
 from pydantic import BaseModel
 import numpy as np
 import pandas as pd
+import base64
 
 import database as db
 import face_engine as fe
@@ -181,6 +182,32 @@ async def ws_phone(ws: WebSocket, room: str):
         if r.phone_ws is ws:
             r.phone_ws = None
 
+@app.websocket("/ws/group_laptop/{room}")
+async def ws_group_laptop(ws: WebSocket, room: str):
+    await ws.accept()
+    r = ROOMS.setdefault(room, Room())
+    r.laptop_ws = ws
+    try:
+        while True: await ws.receive_text()
+    except WebSocketDisconnect:
+        if r.laptop_ws is ws: r.laptop_ws = None
+
+@app.websocket("/ws/group_phone/{room}")
+async def ws_group_phone(ws: WebSocket, room: str):
+    await ws.accept()
+    r = ROOMS.setdefault(room, Room())
+    r.phone_ws = ws
+    try:
+        while True:
+            data = await ws.receive()
+            if data.get("type") == "websocket.receive":
+                if "bytes" in data and data["bytes"]:
+                    if r.laptop_ws: await r.laptop_ws.send_bytes(data["bytes"])
+                elif "text" in data and data["text"]:
+                    if r.laptop_ws: await r.laptop_ws.send_text(data["text"])
+    except WebSocketDisconnect:
+        if r.phone_ws is ws: r.phone_ws = None
+
 @app.post("/api/room/create")
 @app.post("/api/room/create/{room}")
 def create_room(room: str | None = None):
@@ -251,3 +278,36 @@ async def ws_enroll_phone(ws: WebSocket, room: str):
     except WebSocketDisconnect:
         if r.phone_ws is ws:
             r.phone_ws = None
+
+@app.post("/api/enroll/detect_group")
+async def detect_group_faces(file: UploadFile = File(...)):
+    bgr = fe.decode_image(await file.read())
+    if bgr is None:
+        raise HTTPException(400, "Invalid image")
+        
+    faces = fe.detect_embeddings(bgr)
+    if not faces:
+        return {"faces": []}
+        
+    cropped_faces = []
+    import cv2 as cv
+    for f in faces:
+        x, y, w, h = f["box"]
+        # Add padding to the crop so the face isn't cut off tightly
+        pad = int(max(w, h) * 0.2)
+        y1 = max(0, y - pad)
+        y2 = min(bgr.shape[0], y + h + pad)
+        x1 = max(0, x - pad)
+        x2 = min(bgr.shape[1], x + w + pad)
+        
+        crop = bgr[y1:y2, x1:x2]
+        _, buf = cv.imencode(".jpg", crop)
+        b64 = base64.b64encode(buf.tobytes()).decode()
+        
+        cropped_faces.append({
+            "embedding": f["embedding"].tobytes().hex(), # Send as hex string
+            "image_b64": b64,
+            "score": f["score"]
+        })
+        
+    return {"faces": cropped_faces}

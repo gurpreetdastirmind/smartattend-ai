@@ -43,3 +43,9 @@ export const exportUrl = (sid) => `${BASE}/api/attendance/${sid}/export`
 export const createRoom = () => api('/api/room/create', { method: 'POST' })
 
 export const getHistory = (classId) => api(`/api/history/${classId}`)
+
+export const detectGroupFaces = (file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api('/api/enroll/detect_group', { method: 'POST', body: fd })
+}
