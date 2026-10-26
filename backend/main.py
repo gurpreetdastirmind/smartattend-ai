@@ -11,7 +11,7 @@ import face_engine as fe
 import matcher
 
 app = FastAPI(title="SmartAttend AI")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
+app.add_middleware(CORSMiddleware, allow_origins=["https://smartattend-frontend-xxx.onrender.com"], allow_methods=["*"],
                    allow_headers=["*"], allow_credentials=True)
 
 db.init_db()
