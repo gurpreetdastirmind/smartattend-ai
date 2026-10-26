@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Classes from './pages/Classes'
 import Enroll from './pages/Enroll'
 import Attendance from './pages/Attendance'
+import MobileCapture from './pages/MobileCapture'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/classes" element={<Classes />} />
           <Route path="/enroll" element={<Enroll />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/mobile/:room" element={<MobileCapture />} />
         </Routes>
       </main>
     </div>
