@@ -94,8 +94,8 @@ async def process_photo(
     if not sess:
         raise HTTPException(404, "Session not found")
     refs = db.get_class_embeddings(sess["class_id"])
-    if not refs:
-        raise HTTPException(400, "No enrolled students in this class.")
+    # if not refs:
+    #     raise HTTPException(400, "No enrolled students in this class.")
     bgr = fe.decode_image(await file.read())
     if bgr is None:
         raise HTTPException(400, "Corrupt or unsupported image.")

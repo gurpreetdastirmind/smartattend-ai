@@ -64,8 +64,14 @@ export default function Attendance() {
         return s ? { ...row, status: s.status, match_score: s.score, source: 'AI' } : row
       })
       setRoster(merged)
-    } catch (e) {
-      setStatus('❌ ' + e.message)
+        } catch (e) {
+      // If the backend sends a JSON error, parse it nicely
+      try {
+        const errObj = JSON.parse(e.message);
+        setStatus('❌ ' + (errObj.detail || 'Error processing photo'));
+      } catch {
+        setStatus('❌ ' + e.message);
+      }
     }
   }
 
