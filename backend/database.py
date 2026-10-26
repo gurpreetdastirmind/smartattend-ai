@@ -1,59 +1,66 @@
-import sqlite3, os, time
+import os
+import time
 from contextlib import contextmanager
+import psycopg2
+from psycopg2.extras import DictCursor
+import numpy as np
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "smartattend.db")
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+# Get the connection string from Render Environment Variables
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set!")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS classes(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT UNIQUE NOT NULL,
-  created_at TEXT NOT NULL
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) UNIQUE NOT NULL,
+  created_at VARCHAR(255) NOT NULL
 );
 CREATE TABLE IF NOT EXISTS students(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   class_id INTEGER NOT NULL REFERENCES classes(id),
-  roll_no TEXT NOT NULL,
-  full_name TEXT NOT NULL,
-  consent_at TEXT NOT NULL,
+  roll_no VARCHAR(50) NOT NULL,
+  full_name VARCHAR(255) NOT NULL,
+  consent_at VARCHAR(255) NOT NULL,
   UNIQUE(class_id, roll_no)
 );
 CREATE TABLE IF NOT EXISTS embeddings(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   student_id INTEGER NOT NULL REFERENCES students(id),
-  feature_blob BLOB NOT NULL,
-  model_version TEXT NOT NULL,
-  created_at TEXT NOT NULL
+  feature_blob BYTEA NOT NULL,
+  model_version VARCHAR(50) NOT NULL,
+  created_at VARCHAR(255) NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   class_id INTEGER NOT NULL REFERENCES classes(id),
-  session_date TEXT NOT NULL,
-  subject TEXT,
-  created_at TEXT NOT NULL,
-  approved_at TEXT
+  session_date VARCHAR(50) NOT NULL,
+  subject VARCHAR(255),
+  created_at VARCHAR(255) NOT NULL,
+  approved_at VARCHAR(255)
 );
 CREATE TABLE IF NOT EXISTS attendance(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   session_id INTEGER NOT NULL REFERENCES sessions(id),
   student_id INTEGER NOT NULL REFERENCES students(id),
-  status TEXT NOT NULL CHECK(status IN ('UNMARKED','PRESENT','ABSENT')),
+  status VARCHAR(20) NOT NULL CHECK(status IN ('UNMARKED','PRESENT','ABSENT')),
   match_score REAL,
-  source TEXT,
-  reviewed_at TEXT,
+  source VARCHAR(50),
+  reviewed_at VARCHAR(255),
   UNIQUE(session_id, student_id)
 );
 """
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as c:
-        c.executescript(SCHEMA)
-        c.commit()
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as c:
+            c.execute(SCHEMA)
+            conn.commit()
 
 @contextmanager
 def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
     try:
         yield conn
     finally:
@@ -65,91 +72,95 @@ def now():
 # ---- classes ----
 def create_class(name):
     with db() as c:
-        c.execute("INSERT INTO classes(name, created_at) VALUES (?,?)", (name.strip(), now()))
-        c.commit()
-        return c.execute("SELECT * FROM classes WHERE name=?", (name.strip(),)).fetchone()
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("INSERT INTO classes(name, created_at) VALUES (%s,%s) RETURNING *", (name.strip(), now()))
+            return dict(cur.fetchone())
 
 def list_classes():
     with db() as c:
-        return [dict(r) for r in c.execute("SELECT * FROM classes ORDER BY id")]
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM classes ORDER BY id")
+            return [dict(r) for r in cur.fetchall()]
 
 # ---- students ----
 def create_student(class_id, roll_no, full_name, consent=True):
     with db() as c:
-        c.execute("""INSERT INTO students(class_id, roll_no, full_name, consent_at)
-                     VALUES (?,?,?,?)""", (class_id, roll_no.strip(), full_name.strip(), now() if consent else ""))
-        c.commit()
-        return c.execute("""SELECT * FROM students WHERE class_id=? AND roll_no=?""",
-                        (class_id, roll_no.strip())).fetchone()
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""INSERT INTO students(class_id, roll_no, full_name, consent_at)
+                           VALUES (%s,%s,%s,%s) RETURNING *""", 
+                        (class_id, roll_no.strip(), full_name.strip(), now() if consent else ""))
+            return dict(cur.fetchone())
 
 def list_students(class_id):
     with db() as c:
-        return [dict(r) for r in c.execute(
-            "SELECT * FROM students WHERE class_id=? ORDER BY roll_no", (class_id,))]
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM students WHERE class_id=%s ORDER BY roll_no", (class_id,))
+            return [dict(r) for r in cur.fetchall()]
 
 # ---- embeddings ----
 def add_embedding(student_id, blob, model_version):
-    import numpy as np
-    arr = np.frombuffer(blob, dtype=np.float32)
     with db() as c:
-        c.execute("""INSERT INTO embeddings(student_id, feature_blob, model_version, created_at)
-                     VALUES (?,?,?,?)""", (student_id, arr.tobytes(), model_version, now()))
-        c.commit()
+        with c.cursor() as cur:
+            cur.execute("""INSERT INTO embeddings(student_id, feature_blob, model_version, created_at)
+                           VALUES (%s,%s,%s,%s)""", (student_id, blob, model_version, now()))
 
 def get_class_embeddings(class_id):
-    import numpy as np
     with db() as c:
-        rows = c.execute("""
-            SELECT e.student_id, e.feature_blob, s.full_name, s.roll_no
-            FROM embeddings e JOIN students s ON s.id=e.student_id
-            WHERE s.class_id=?
-        """, (class_id,)).fetchall()
-    out = []
-    for r in rows:
-        vec = np.frombuffer(r["feature_blob"], dtype=np.float32)
-        out.append({"student_id": r["student_id"], "name": r["full_name"],
-                    "roll": r["roll_no"], "vec": vec})
-    return out
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT e.student_id, e.feature_blob, s.full_name, s.roll_no
+                FROM embeddings e JOIN students s ON s.id=e.student_id
+                WHERE s.class_id=%s
+            """, (class_id,))
+            out = []
+            for r in cur.fetchall():
+                vec = np.frombuffer(bytes(r["feature_blob"]), dtype=np.float32)
+                out.append({"student_id": r["student_id"], "name": r["full_name"],
+                            "roll": r["roll_no"], "vec": vec})
+            return out
 
 # ---- sessions + attendance ----
 def create_session(class_id, session_date, subject):
     with db() as c:
-        c.execute("""INSERT INTO sessions(class_id, session_date, subject, created_at)
-                     VALUES (?,?,?,?)""", (class_id, session_date, subject, now()))
-        c.commit()
-        return c.execute("SELECT * FROM sessions ORDER BY id DESC LIMIT 1").fetchone()
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""INSERT INTO sessions(class_id, session_date, subject, created_at)
+                           VALUES (%s,%s,%s,%s) RETURNING *""", (class_id, session_date, subject, now()))
+            return dict(cur.fetchone())
 
 def get_session(session_id):
     with db() as c:
-        r = c.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-        return dict(r) if r else None
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT * FROM sessions WHERE id=%s", (session_id,))
+            r = cur.fetchone()
+            return dict(r) if r else None
 
 def upsert_attendance(session_id, student_id, status, score=None, source="AI"):
     with db() as c:
-        c.execute("""INSERT INTO attendance(session_id, student_id, status, match_score, source, reviewed_at)
-                     VALUES (?,?,?,?,?,?)
-                     ON CONFLICT(session_id, student_id) DO UPDATE SET
-                       status=excluded.status,
-                       match_score=COALESCE(excluded.match_score, attendance.match_score),
-                       source=excluded.source,
-                       reviewed_at=excluded.reviewed_at""",
-                  (session_id, student_id, status, score, source, now()))
-        c.commit()
+        with c.cursor() as cur:
+            cur.execute("""INSERT INTO attendance(session_id, student_id, status, match_score, source, reviewed_at)
+                           VALUES (%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT(session_id, student_id) DO UPDATE SET
+                             status=EXCLUDED.status,
+                             match_score=COALESCE(EXCLUDED.match_score, attendance.match_score),
+                             source=EXCLUDED.source,
+                             reviewed_at=EXCLUDED.reviewed_at""",
+                        (session_id, student_id, status, score, source, now()))
 
 def approve_session(session_id):
     with db() as c:
-        c.execute("UPDATE sessions SET approved_at=? WHERE id=?", (now(), session_id))
-        c.commit()
+        with c.cursor() as cur:
+            cur.execute("UPDATE sessions SET approved_at=%s WHERE id=%s", (now(), session_id))
 
 def get_attendance(session_id):
     with db() as c:
-        rows = c.execute("""
-            SELECT s.id as student_id, s.roll_no, s.full_name,
-                   COALESCE(a.status,'UNMARKED') as status,
-                   a.match_score, a.source
-            FROM students s
-            LEFT JOIN attendance a ON a.student_id=s.id AND a.session_id=?
-            JOIN sessions se ON se.class_id=s.class_id AND se.id=?
-            ORDER BY s.roll_no
-        """, (session_id, session_id)).fetchall()
-    return [dict(r) for r in rows]
+        with c.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("""
+                SELECT s.id as student_id, s.roll_no, s.full_name,
+                       COALESCE(a.status,'UNMARKED') as status,
+                       a.match_score, a.source
+                FROM students s
+                LEFT JOIN attendance a ON a.student_id=s.id AND a.session_id=%s
+                JOIN sessions se ON se.class_id=s.class_id AND se.id=%s
+                ORDER BY s.roll_no
+            """, (session_id, session_id))
+            return [dict(r) for r in cur.fetchall()]
