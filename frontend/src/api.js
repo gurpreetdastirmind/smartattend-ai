@@ -49,3 +49,4 @@ export const detectGroupFaces = (file) => {
   fd.append('file', file)
   return api('/api/enroll/detect_group', { method: 'POST', body: fd })
 }
+

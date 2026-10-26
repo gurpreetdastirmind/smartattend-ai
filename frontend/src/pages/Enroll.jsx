@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { listClasses, listStudents, enroll, createRoom, detectGroupFaces } from '../api'
+import { listClasses, listStudents, enroll, addStudent, createRoom, detectGroupFaces } from '../api'
 import { openEnrollLaptopWs, openGroupEnrollLaptopWs } from '../ws'
 
 export default function Enroll() {
@@ -9,7 +9,7 @@ export default function Enroll() {
   const [files, setFiles] = useState([])
   const [msg, setMsg] = useState('')
   
-  // Mobile camera state
+  // Mobile / Group state
   const [room, setRoom] = useState('')
   const [status, setStatus] = useState('')
   const [targetStudent, setTargetStudent] = useState(null)
@@ -18,9 +18,13 @@ export default function Enroll() {
   const wsRef = useRef(null)
 
   useEffect(() => { listClasses().then(setClasses) }, [])
-  useEffect(() => { if (sel) listStudents(sel.id).then(setStudents) }, [sel])
+  
+  const refreshStudents = async () => {
+    if (sel) setStudents(await listStudents(sel.id))
+  }
+  useEffect(() => { refreshStudents() }, [sel])
 
-  // 1. Basic enroll for single manual file upload
+  // Basic enroll for single manual file upload
   const doEnroll = async (sid, selectedFiles = files) => {
     if (!selectedFiles.length) return alert('Choose 1-3 images')
     try {
@@ -30,7 +34,7 @@ export default function Enroll() {
     } catch (e) { setMsg('❌ ' + e.message) }
   }
 
-  // 2. Mobile Individual Enroll
+  // Mobile Individual Enroll
   const startMobileEnroll = async (student) => {
     setTargetStudent(student)
     setIsGroupMode(false)
@@ -49,7 +53,7 @@ export default function Enroll() {
     ws.onopen = () => setStatus(`Room ready for ${student.full_name} — scan QR`)
   }
 
-  // 3. Mobile Group Enroll
+  // Start Group Enroll (Mobile or Laptop)
   const startGroupEnroll = async () => {
     setIsGroupMode(true)
     setTargetStudent(null)
@@ -67,18 +71,18 @@ export default function Enroll() {
     ws.onopen = () => setStatus(`Room ready for Group Photo — scan QR`)
   }
 
-  // 4. Laptop Upload Group Enroll (NEW)
+  // Upload Group Enroll from Laptop
   const onGroupFileUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     setIsGroupMode(true)
     setCroppedFaces([])
-    setRoom('') // Hide QR code if it was there
+    setRoom('') 
     setStatus('Detecting faces from uploaded image…')
     await processGroupImage(file)
   }
 
-  // Shared logic to process the image and show cropped faces
+  // Shared logic to process the image
   const processGroupImage = async (file) => {
     try {
       const res = await detectGroupFaces(file)
@@ -86,10 +90,47 @@ export default function Enroll() {
         setStatus('⚠️ No faces detected in the photo.')
       } else {
         setCroppedFaces(res.faces)
-        setStatus(`✅ Detected ${res.faces.length} face(s). Select a student to enroll.`)
+        setStatus(`✅ Detected ${res.faces.length} face(s). Fill details to enroll.`)
       }
     } catch (err) {
       setStatus('❌ Error processing group photo.')
+    }
+  }
+
+  // NEW: Add Student and Enroll Face simultaneously
+  const handleAddAndEnroll = async (idx, faceB64) => {
+    const rollInput = document.getElementById(`roll-${idx}`).value
+    const nameInput = document.getElementById(`name-${idx}`).value
+
+    if (!rollInput || !nameInput) {
+      return alert("Please enter both Roll No and Name")
+    }
+
+    setStatus(`Creating student ${nameInput} and enrolling face...`)
+    try {
+      // 1. Create student in database
+      const newStudent = await addStudent({
+        class_id: sel.id,
+        roll_no: rollInput,
+        full_name: nameInput
+      })
+      
+      // 2. Prepare the cropped image as a file
+      const blob = await (await fetch(`data:image/jpeg;base64,${faceB64}`)).blob()
+      const file = new File([blob], "crop.jpg", { type: "image/jpeg" })
+      
+      // 3. Enroll face
+      await enroll(newStudent.student.id, [file])
+      
+      setStatus(`✅ Successfully added and enrolled ${nameInput}!`)
+      
+      // Clear inputs and refresh table
+      document.getElementById(`roll-${idx}`).value = ''
+      document.getElementById(`name-${idx}`).value = ''
+      refreshStudents()
+
+    } catch (err) {
+      setStatus('❌ Error: ' + err.message)
     }
   }
 
@@ -157,37 +198,26 @@ export default function Enroll() {
             </div>
           )}
 
-          {/* Cropped Faces Result (Works for BOTH mobile and laptop uploads) */}
+          {/* Cropped Faces Result */}
           {isGroupMode && croppedFaces.length > 0 && (
             <div style={{ marginTop: '20px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
               <h3>Detected Faces</h3>
-              <p className="muted">Click a face below, then choose the student to enroll it.</p>
+              <p className="muted">Enter Roll No and Name for each face, then click Enroll.</p>
               
               <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '10px' }}>
                 {croppedFaces.map((face, idx) => (
-                  <div key={idx} style={{ background: '#0f172a', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                  <div key={idx} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', width: '160px' }}>
                     <img src={`data:image/jpeg;base64,${face.image_b64}`} alt="face" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
-                    <br />
-                    <select 
-                      onChange={async (e) => {
-                        const sid = e.target.value;
-                        if (!sid) return;
-                        setStatus('Enrolling face...');
-                        try {
-                          const blob = await (await fetch(`data:image/jpeg;base64,${face.image_b64}`)).blob();
-                          const file = new File([blob], "crop.jpg", { type: "image/jpeg" });
-                          await enroll(sid, [file]);
-                          setStatus('✅ Face enrolled successfully!');
-                          e.target.value = "";
-                        } catch (err) {
-                          setStatus('❌ Error: ' + err.message);
-                        }
-                      }}
-                      style={{ marginTop: '10px', width: '120px' }}
+                    
+                    <input id={`roll-${idx}`} placeholder="Roll No" style={{ width: '100%', marginTop: '10px', padding: '6px', fontSize: '12px' }} />
+                    <input id={`name-${idx}`} placeholder="Full Name" style={{ width: '100%', marginTop: '6px', padding: '6px', fontSize: '12px' }} />
+                    
+                    <button 
+                      onClick={() => handleAddAndEnroll(idx, face.image_b64)}
+                      style={{ width: '100%', marginTop: '8px', padding: '6px', fontSize: '12px', background: '#22c55e' }}
                     >
-                      <option value="">Select Student</option>
-                      {students.map(s => <option key={s.id} value={s.id}>{s.roll_no} - {s.full_name}</option>)}
-                    </select>
+                      Save & Enroll
+                    </button>
                   </div>
                 ))}
               </div>
