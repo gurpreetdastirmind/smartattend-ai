@@ -191,3 +191,36 @@ def create_room(room: str | None = None):
 @app.get("/health")
 def health():
     return {"ok": True, "time": datetime.datetime.now().isoformat()}
+
+
+# ---------- Mobile capture WebSocket relay (ENROLLMENT) ----------
+@app.websocket("/ws/enroll_laptop/{room}")
+async def ws_enroll_laptop(ws: WebSocket, room: str):
+    await ws.accept()
+    r = ROOMS.setdefault(room, Room())
+    r.laptop_ws = ws
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        if r.laptop_ws is ws:
+            r.laptop_ws = None
+
+@app.websocket("/ws/enroll_phone/{room}")
+async def ws_enroll_phone(ws: WebSocket, room: str):
+    await ws.accept()
+    r = ROOMS.setdefault(room, Room())
+    r.phone_ws = ws
+    try:
+        while True:
+            data = await ws.receive()
+            if data.get("type") == "websocket.receive":
+                if "bytes" in data and data["bytes"]:
+                    if r.laptop_ws:
+                        await r.laptop_ws.send_bytes(data["bytes"])
+                elif "text" in data and data["text"]:
+                    if r.laptop_ws:
+                        await r.laptop_ws.send_text(data["text"])
+    except WebSocketDisconnect:
+        if r.phone_ws is ws:
+            r.phone_ws = None

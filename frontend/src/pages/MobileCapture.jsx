@@ -13,6 +13,8 @@ export default function MobileCapture() {
 
   // Open WebSocket
   useEffect(() => {
+    const isEnroll = new URLSearchParams(window.location.search).get('type') === 'enroll'
+    const wsPath = isEnroll ? '/ws/enroll_phone' : '/ws/phone'
     const ws = new WebSocket(`${WS}/ws/phone/${room}`)
     ws.onopen = () => { setConnected(true); setStatus('Connected — ready to send') }
     ws.onclose = () => { setConnected(false); setStatus('Disconnected') }
