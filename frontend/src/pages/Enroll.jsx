@@ -20,7 +20,7 @@ export default function Enroll() {
   useEffect(() => { listClasses().then(setClasses) }, [])
   useEffect(() => { if (sel) listStudents(sel.id).then(setStudents) }, [sel])
 
-  // Basic enroll for manual file upload
+  // 1. Basic enroll for single manual file upload
   const doEnroll = async (sid, selectedFiles = files) => {
     if (!selectedFiles.length) return alert('Choose 1-3 images')
     try {
@@ -30,7 +30,7 @@ export default function Enroll() {
     } catch (e) { setMsg('❌ ' + e.message) }
   }
 
-  // Mobile Individual Enroll
+  // 2. Mobile Individual Enroll
   const startMobileEnroll = async (student) => {
     setTargetStudent(student)
     setIsGroupMode(false)
@@ -49,7 +49,7 @@ export default function Enroll() {
     ws.onopen = () => setStatus(`Room ready for ${student.full_name} — scan QR`)
   }
 
-  // Mobile Group Enroll
+  // 3. Mobile Group Enroll
   const startGroupEnroll = async () => {
     setIsGroupMode(true)
     setTargetStudent(null)
@@ -61,21 +61,36 @@ export default function Enroll() {
     const ws = openGroupEnrollLaptopWs(rid, async (blob) => {
       setStatus('📷 Group photo received! Detecting faces…')
       const file = new File([blob], 'group_enroll.jpg', { type: 'image/jpeg' })
-      
-      try {
-        const res = await detectGroupFaces(file)
-        if (!res.faces || res.faces.length === 0) {
-          setStatus('⚠️ No faces detected in the photo.')
-        } else {
-          setCroppedFaces(res.faces)
-          setStatus(`✅ Detected ${res.faces.length} face(s). Select a student to enroll.`)
-        }
-      } catch (e) {
-        setStatus('❌ Error processing group photo.')
-      }
+      await processGroupImage(file)
     })
     wsRef.current = ws
     ws.onopen = () => setStatus(`Room ready for Group Photo — scan QR`)
+  }
+
+  // 4. Laptop Upload Group Enroll (NEW)
+  const onGroupFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsGroupMode(true)
+    setCroppedFaces([])
+    setRoom('') // Hide QR code if it was there
+    setStatus('Detecting faces from uploaded image…')
+    await processGroupImage(file)
+  }
+
+  // Shared logic to process the image and show cropped faces
+  const processGroupImage = async (file) => {
+    try {
+      const res = await detectGroupFaces(file)
+      if (!res.faces || res.faces.length === 0) {
+        setStatus('⚠️ No faces detected in the photo.')
+      } else {
+        setCroppedFaces(res.faces)
+        setStatus(`✅ Detected ${res.faces.length} face(s). Select a student to enroll.`)
+      }
+    } catch (err) {
+      setStatus('❌ Error processing group photo.')
+    }
   }
 
   const phoneUrl = room ? `${location.origin}/mobile/${room}?type=${isGroupMode ? 'group_enroll' : 'enroll'}` : ''
@@ -83,11 +98,19 @@ export default function Enroll() {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Enroll Faces</h2>
-        <button onClick={startGroupEnroll} style={{ background: '#8b5cf6' }}>
-          📸 Capture Group Photo
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 style={{ margin: 0 }}>Enroll Faces</h2>
+        
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <label style={{ background: '#2563eb', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
+            📁 Upload Group Photo
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={onGroupFileUpload} />
+          </label>
+          
+          <button onClick={startGroupEnroll} style={{ background: '#8b5cf6' }}>
+            📸 Capture Group Photo (Mobile)
+          </button>
+        </div>
       </div>
       
       <label>Class:</label>
@@ -119,7 +142,7 @@ export default function Enroll() {
             </tbody>
           </table>
 
-          {/* QR Code Block */}
+          {/* QR Code Block for Mobile */}
           {room && (
             <div className="mobile-box" style={{ marginTop: '20px' }}>
               <div>
@@ -134,7 +157,7 @@ export default function Enroll() {
             </div>
           )}
 
-          {/* Cropped Faces Result (For Group Mode) */}
+          {/* Cropped Faces Result (Works for BOTH mobile and laptop uploads) */}
           {isGroupMode && croppedFaces.length > 0 && (
             <div style={{ marginTop: '20px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
               <h3>Detected Faces</h3>
@@ -151,14 +174,11 @@ export default function Enroll() {
                         if (!sid) return;
                         setStatus('Enrolling face...');
                         try {
-                          // Directly hit the enroll endpoint using a dummy File object won't work since we have an embedding.
-                          // Instead, we send a special request to the backend to just save this embedding.
-                          // For simplicity in this MVP, we'll convert the b64 image back to a file and send it!
                           const blob = await (await fetch(`data:image/jpeg;base64,${face.image_b64}`)).blob();
                           const file = new File([blob], "crop.jpg", { type: "image/jpeg" });
                           await enroll(sid, [file]);
                           setStatus('✅ Face enrolled successfully!');
-                          e.target.value = ""; // reset
+                          e.target.value = "";
                         } catch (err) {
                           setStatus('❌ Error: ' + err.message);
                         }
