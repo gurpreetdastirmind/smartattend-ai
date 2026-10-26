@@ -280,7 +280,10 @@ async def ws_enroll_phone(ws: WebSocket, room: str):
             r.phone_ws = None
 
 @app.post("/api/enroll/detect_group")
-async def detect_group_faces(file: UploadFile = File(...)):
+async def detect_group_faces(
+    class_id: int = Form(...), # NEW: We need the class ID to check existing faces
+    file: UploadFile = File(...)
+):
     bgr = fe.decode_image(await file.read())
     if bgr is None:
         raise HTTPException(400, "Invalid image")
@@ -289,24 +292,41 @@ async def detect_group_faces(file: UploadFile = File(...)):
     if not faces:
         return {"faces": []}
         
+    # Get all currently enrolled faces for this class
+    existing_refs = db.get_class_embeddings(class_id)
+    
     cropped_faces = []
     import cv2 as cv
+    import numpy as np
+    
     for f in faces:
         x, y, w, h = f["box"]
-        # Add padding to the crop so the face isn't cut off tightly
         pad = int(max(w, h) * 0.2)
-        y1 = max(0, y - pad)
-        y2 = min(bgr.shape[0], y + h + pad)
-        x1 = max(0, x - pad)
-        x2 = min(bgr.shape[1], x + w + pad)
+        y1 = max(0, y - pad); y2 = min(bgr.shape[0], y + h + pad)
+        x1 = max(0, x - pad); x2 = min(bgr.shape[1], x + w + pad)
         
         crop = bgr[y1:y2, x1:x2]
         _, buf = cv.imencode(".jpg", crop)
         b64 = base64.b64encode(buf.tobytes()).decode()
         
+        # Check if this face is already enrolled
+        existing_name = None
+        if existing_refs:
+            best_score = 0
+            best_name = None
+            for ref in existing_refs:
+                score = float(np.dot(f["embedding"], ref["vec"]))
+                if score > best_score:
+                    best_score = score
+                    best_name = ref["name"]
+            
+            # If the highest score is above the threshold, it's a match
+            if best_score > matcher.DEFAULT_THRESHOLD:
+                existing_name = best_name
+                
         cropped_faces.append({
-            "embedding": f["embedding"].tobytes().hex(), # Send as hex string
             "image_b64": b64,
+            "existing_name": existing_name, # Send back the name if found
             "score": f["score"]
         })
         

@@ -44,9 +44,10 @@ export const createRoom = () => api('/api/room/create', { method: 'POST' })
 
 export const getHistory = (classId) => api(`/api/history/${classId}`)
 
-export const detectGroupFaces = (file) => {
+export const detectGroupFaces = (file, classId) => {
   const fd = new FormData()
   fd.append('file', file)
+  fd.append('class_id', classId)
   return api('/api/enroll/detect_group', { method: 'POST', body: fd })
 }
 
