@@ -188,6 +188,33 @@ def create_room(room: str | None = None):
     ROOMS.setdefault(rid, Room())
     return {"room": rid}
 
+@app.get("/api/history/{class_id}")
+def get_history(class_id: int):
+    with db.db() as c:
+        with c.cursor() as cur:
+            # Get all sessions for this class
+            cur.execute("SELECT id, session_date, subject FROM sessions WHERE class_id=%s ORDER BY id DESC", (class_id,))
+            sessions = cur.fetchall()
+            
+            history = []
+            for sess in sessions:
+                # Get attendance for each session
+                cur.execute("""
+                    SELECT s.roll_no, s.full_name, COALESCE(a.status, 'UNMARKED') as status
+                    FROM students s
+                    LEFT JOIN attendance a ON a.student_id=s.id AND a.session_id=%s
+                    WHERE s.class_id=%s
+                    ORDER BY s.roll_no
+                """, (sess[0], class_id))
+                records = cur.fetchall()
+                history.append({
+                    "session_id": sess[0],
+                    "date": sess[1],
+                    "subject": sess[2],
+                    "records": [{"roll": r[0], "name": r[1], "status": r[2]} for r in records]
+                })
+            return history
+
 @app.get("/health")
 def health():
     return {"ok": True, "time": datetime.datetime.now().isoformat()}

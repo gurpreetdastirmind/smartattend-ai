@@ -4,6 +4,7 @@ import Classes from './pages/Classes'
 import Enroll from './pages/Enroll'
 import Attendance from './pages/Attendance'
 import MobileCapture from './pages/MobileCapture'
+import History from './pages/History'
 
 export default function App() {
   const location = useLocation();
@@ -19,6 +20,7 @@ export default function App() {
           <Link to="/classes">Classes</Link>
           <Link to="/enroll">Enroll</Link>
           <Link to="/attendance">Take Attendance</Link>
+          <Link to="/history">History</Link> 
         </nav>
       )}
       
@@ -29,6 +31,7 @@ export default function App() {
           <Route path="/classes" element={<Classes />} />
           <Route path="/enroll" element={<Enroll />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/history" element={<History />} />
           <Route path="/mobile/:room" element={<MobileCapture />} />
         </Routes>
       </main>

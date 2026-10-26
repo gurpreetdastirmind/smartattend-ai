@@ -41,3 +41,5 @@ export const saveAttendance = (body) =>
 export const getAttendance = (sid) => api(`/api/attendance/${sid}`)
 export const exportUrl = (sid) => `${BASE}/api/attendance/${sid}/export`
 export const createRoom = () => api('/api/room/create', { method: 'POST' })
+
+export const getHistory = (classId) => api(`/api/history/${classId}`)
