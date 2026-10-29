@@ -28,7 +28,7 @@ export default function History() {
       {sel && history.length === 0 && <p className="muted" style={{ marginTop: '24px' }}>No sessions recorded yet for this class.</p>}
 
       {history.map(session => (
-        <div key={session.session_id} style={{ marginTop: '24px', padding: '24px', background: 'var(--bg-input)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+        <div key={session.session_id} style={{ marginTop: '24px', padding: '24px', background: '#f9fafb', borderRadius: '12px', border: '1px solid var(--border)' }}>
           <h3 style={{ marginTop: 0, color: 'var(--primary)' }}>
             📅 {session.date} {session.subject ? `— ${session.subject}` : ''}
           </h3>
@@ -39,9 +39,9 @@ export default function History() {
             <tbody>
               {session.records.map(r => (
                 <tr key={r.roll}>
-                  <td>{r.roll}</td>
+                  <td><b>{r.roll}</b></td>
                   <td>{r.name}</td>
-                  <td className={`st-${r.status}`}>{r.status}</td>
+                  <td><span className={`badge st-${r.status}`}>{r.status}</span></td>
                 </tr>
               ))}
             </tbody>
