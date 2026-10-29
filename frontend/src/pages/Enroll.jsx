@@ -9,7 +9,6 @@ export default function Enroll() {
   const [files, setFiles] = useState([])
   const [msg, setMsg] = useState('')
 
-  // Mobile / Group state
   const [room, setRoom] = useState('')
   const [status, setStatus] = useState('')
   const [targetStudent, setTargetStudent] = useState(null)
@@ -24,7 +23,6 @@ export default function Enroll() {
   }
   useEffect(() => { refreshStudents() }, [sel])
 
-  // Basic enroll for single manual file upload
   const doEnroll = async (sid, selectedFiles = files) => {
     if (!selectedFiles.length) return alert('Choose 1-3 images')
     try {
@@ -34,7 +32,6 @@ export default function Enroll() {
     } catch (e) { setMsg('❌ ' + e.message) }
   }
 
-  // Mobile Individual Enroll
   const startMobileEnroll = async (student) => {
     setTargetStudent(student)
     setIsGroupMode(false)
@@ -53,7 +50,6 @@ export default function Enroll() {
     ws.onopen = () => setStatus(`Room ready for ${student.full_name} — scan QR`)
   }
 
-  // Start Group Enroll (Mobile or Laptop)
   const startGroupEnroll = async () => {
     setIsGroupMode(true)
     setTargetStudent(null)
@@ -71,7 +67,6 @@ export default function Enroll() {
     ws.onopen = () => setStatus(`Room ready for Group Photo — scan QR`)
   }
 
-  // Upload Group Enroll from Laptop
   const onGroupFileUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -82,10 +77,8 @@ export default function Enroll() {
     await processGroupImage(file)
   }
 
-  // Shared logic to process the image
   const processGroupImage = async (file) => {
     try {
-      // Pass the selected class ID here
       const res = await detectGroupFaces(file, sel.id)
       if (!res.faces || res.faces.length === 0) {
         setStatus('⚠️ No faces detected in the photo.')
@@ -98,7 +91,6 @@ export default function Enroll() {
     }
   }
 
-  // NEW: Add Student and Enroll Face simultaneously
   const handleAddAndEnroll = async (idx, faceB64) => {
     const rollInput = document.getElementById(`roll-${idx}`).value
     const nameInput = document.getElementById(`name-${idx}`).value
@@ -109,23 +101,18 @@ export default function Enroll() {
 
     setStatus(`Creating student ${nameInput} and enrolling face...`)
     try {
-      // 1. Create student in database
       const newStudent = await addStudent({
         class_id: sel.id,
         roll_no: rollInput,
         full_name: nameInput
       })
 
-      // 2. Prepare the cropped image as a file
       const blob = await (await fetch(`data:image/jpeg;base64,${faceB64}`)).blob()
       const file = new File([blob], "crop.jpg", { type: "image/jpeg" })
 
-      // 3. Enroll face
       await enroll(newStudent.student.id, [file])
 
       setStatus(`✅ Successfully added and enrolled ${nameInput}!`)
-
-      // Clear inputs and refresh table
       document.getElementById(`roll-${idx}`).value = ''
       document.getElementById(`name-${idx}`).value = ''
       refreshStudents()
@@ -140,88 +127,93 @@ export default function Enroll() {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ margin: 0 }}>Enroll Faces</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1.8rem' }}>Enroll Faces</h2>
+          <p className="muted small" style={{ marginTop: '4px' }}>Register student identities for the AI to recognize.</p>
+        </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <label style={{ background: '#2563eb', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <label className="btn-upload">
             📁 Upload Group Photo
             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={onGroupFileUpload} />
           </label>
 
-          <button onClick={startGroupEnroll} style={{ background: '#8b5cf6' }}>
+          <button className="btn-purple" onClick={startGroupEnroll}>
             📸 Capture Group Photo (Mobile)
           </button>
         </div>
       </div>
 
-      <label>Class:</label>
-      <select value={sel?.id || ''} onChange={e => setSel(classes.find(c => c.id === +e.target.value))}>
-        <option value="">— select —</option>
-        {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <label>Select Class:</label>
+        <select value={sel?.id || ''} onChange={e => setSel(classes.find(c => c.id === +e.target.value))}>
+          <option value="">— select class —</option>
+          {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
 
       {sel && (
         <>
-          <div className="row" style={{ marginTop: 12 }}>
-            <input type="file" accept="image/*" multiple onChange={e => setFiles(Array.from(e.target.files || []))} />
+          <div className="row" style={{ marginTop: 24 }}>
+            <input type="file" accept="image/*" multiple onChange={e => setFiles(Array.from(e.target.files || []))} style={{ maxWidth: '400px' }} />
             <span className="muted">{files.length} selected</span>
           </div>
-          {msg && <p>{msg}</p>}
+          {msg && <p style={{ color: 'var(--success)', fontWeight: 600 }}>{msg}</p>}
 
           <table>
             <thead><tr><th>Roll</th><th>Name</th><th>Actions</th></tr></thead>
             <tbody>
               {students.map(s => (
                 <tr key={s.id}>
-                  <td>{s.roll_no}</td><td>{s.full_name}</td>
+                  <td><b>{s.roll_no}</b></td>
+                  <td>{s.full_name}</td>
                   <td style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => doEnroll(s.id)}>Upload File</button>
-                    <button onClick={() => startMobileEnroll(s)}>📱 Single Photo</button>
+                    <button className="btn-purple" onClick={() => startMobileEnroll(s)}>📱 Single Photo</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {/* QR Code Block for Mobile */}
           {room && (
-            <div className="mobile-box" style={{ marginTop: '20px' }}>
+            <div className="mobile-box">
               <div>
-                {!isGroupMode && <p><b>Enrolling:</b> {targetStudent?.full_name}</p>}
-                {isGroupMode && <p><b>Enrolling: Group Photo</b></p>}
-                <p><b>Scan with your phone:</b></p>
+                {!isGroupMode && <p style={{ fontSize: '1.1rem' }}><b>Enrolling:</b> {targetStudent?.full_name}</p>}
+                {isGroupMode && <p style={{ fontSize: '1.1rem' }}><b>Enrolling:</b> Group Photo</p>}
+                <p className="muted small">Scan with your phone camera:</p>
                 <img src={qrSrc} alt="QR" className="qr" />
               </div>
-              <div className="muted small">
-                Tap <b>Send Photo</b> on the phone.
+              <div className="muted" style={{ maxWidth: '200px' }}>
+                <p>📱 Tap <b>Send Photo</b> on the phone.</p>
+                <p>💻 The laptop will automatically process it.</p>
               </div>
             </div>
           )}
 
-          {/* Cropped Faces Result */}
           {isGroupMode && croppedFaces.length > 0 && (
-            <div style={{ marginTop: '20px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
-              <h3>Detected Faces</h3>
-              <p className="muted">Enter Roll No and Name for each face, then click Enroll.</p>
+            <div style={{ marginTop: '32px', borderTop: '2px solid var(--border)', paddingTop: '32px' }}>
+              <h3 style={{ marginTop: 0 }}>Detected Faces</h3>
+              <p className="muted small">Enter Roll No and Name for each face, then click Enroll.</p>
 
-              <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '10px' }}>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '20px' }}>
                 {croppedFaces.map((face, idx) => (
-                  <div key={idx} style={{ background: '#0f172a', padding: '12px', borderRadius: '8px', textAlign: 'center', width: '160px' }}>
-                    <img src={`data:image/jpeg;base64,${face.image_b64}`} alt="face" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                  <div key={idx} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', textAlign: 'center', width: '180px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+                    <img src={`data:image/jpeg;base64,${face.image_b64}`} alt="face" style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '12px', boxShadow: 'var(--shadow-sm)', marginBottom: '12px' }} />
 
                     {face.existing_name ? (
-                      <div style={{ marginTop: '10px', padding: '8px', background: '#334155', borderRadius: '6px', fontSize: '12px', color: '#4ade80' }}>
-                        ✅ Already Enrolled:<br /><b>{face.existing_name}</b>
+                      <div style={{ padding: '12px', background: 'var(--success-bg)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--success)', fontWeight: 600 }}>
+                        ✅ Already Enrolled:<br /><span style={{ fontSize: '1rem' }}>{face.existing_name}</span>
                       </div>
                     ) : (
                       <>
-                        <input id={`roll-${idx}`} placeholder="Roll No" style={{ width: '100%', marginTop: '10px', padding: '6px', fontSize: '12px' }} />
-                        <input id={`name-${idx}`} placeholder="Full Name" style={{ width: '100%', marginTop: '6px', padding: '6px', fontSize: '12px' }} />
+                        <input id={`roll-${idx}`} placeholder="Roll No" style={{ width: '100%', marginBottom: '8px', padding: '8px', fontSize: '0.9rem' }} />
+                        <input id={`name-${idx}`} placeholder="Full Name" style={{ width: '100%', marginBottom: '12px', padding: '8px', fontSize: '0.9rem' }} />
 
                         <button
                           onClick={() => handleAddAndEnroll(idx, face.image_b64)}
-                          style={{ width: '100%', marginTop: '8px', padding: '6px', fontSize: '12px', background: '#22c55e' }}
+                          style={{ width: '100%', padding: '10px', fontSize: '0.9rem', background: 'var(--success)' }}
                         >
                           Save & Enroll
                         </button>
@@ -233,7 +225,7 @@ export default function Enroll() {
             </div>
           )}
 
-          {status && <p className="status">{status}</p>}
+          {status && <p style={{ color: 'var(--primary)', fontWeight: 600, marginTop: '24px' }}>{status}</p>}
         </>
       )}
     </div>

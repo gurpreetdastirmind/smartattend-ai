@@ -22,15 +22,12 @@ export default function Attendance() {
 
   useEffect(() => { listClasses().then(setClasses) }, [])
 
-  // Auto-create a room when user clicks "Capture on Mobile"
   const startMobileCapture = async () => {
     const { room: rid } = await createRoom()
     setRoom(rid)
     setPhoneConnected(false)
     setStatus('Waiting for phone…')
-    // open WS as laptop
     const ws = openLaptopWs(rid, async (blob) => {
-      // blob = jpeg from phone
       setStatus('📷 Photo received from phone, processing…')
       const file = new File([blob], 'mobile.jpg', { type: 'image/jpeg' })
       await handlePhoto(file)
@@ -50,7 +47,6 @@ export default function Attendance() {
         setAnnotated(`data:image/jpeg;base64,${r.annotated_b64}`)
         setStatus(`✅ Detected ${r.faces.length} face(s)`)
       }
-      // Merge suggestions into roster
       const att = await getAttendance(session.id)
       const sugMap = {}
       r.suggestions.forEach(s => {
@@ -64,8 +60,7 @@ export default function Attendance() {
         return s ? { ...row, status: s.status, match_score: s.score, source: 'AI' } : row
       })
       setRoster(merged)
-        } catch (e) {
-      // If the backend sends a JSON error, parse it nicely
+    } catch (e) {
       try {
         const errObj = JSON.parse(e.message);
         setStatus('❌ ' + (errObj.detail || 'Error processing photo'));
@@ -96,17 +91,16 @@ export default function Attendance() {
     if (f) await handlePhoto(f)
   }
 
-  // Build QR that points to mobile route
-  const phoneUrl = room
-    ? `${location.origin}/mobile/${room}`
-    : ''
-  const qrSrc = phoneUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(phoneUrl)}`
-    : ''
+  const phoneUrl = room ? `${location.origin}/mobile/${room}` : ''
+  const qrSrc = phoneUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(phoneUrl)}` : ''
 
   return (
     <div className="card">
-      <h2>Take Attendance</h2>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ margin: 0, fontSize: '1.8rem' }}>Take Attendance</h2>
+        <p className="muted small" style={{ marginTop: '4px' }}>Create a session, then upload a group photo or connect your phone.</p>
+      </div>
+
       <div className="row">
         <select value={cls?.id || ''} onChange={e => setCls(classes.find(c => c.id === +e.target.value))}>
           <option value="">— select class —</option>
@@ -122,41 +116,41 @@ export default function Attendance() {
           <div className="row">
             <label>Threshold</label>
             <input type="number" step="0.01" value={threshold}
-              onChange={e => setThreshold(+e.target.value)} style={{ width: 80 }} />
+              onChange={e => setThreshold(+e.target.value)} style={{ width: 100, maxWidth: '100px' }} />
             <label>Margin</label>
             <input type="number" step="0.01" value={margin}
-              onChange={e => setMargin(+e.target.value)} style={{ width: 80 }} />
+              onChange={e => setMargin(+e.target.value)} style={{ width: 100, maxWidth: '100px' }} />
           </div>
 
           <div className="row">
-            <input type="file" accept="image/*" onChange={onUploadFile} />
-            <button onClick={startMobileCapture}>📱 Capture on Mobile</button>
+            <input type="file" accept="image/*" onChange={onUploadFile} style={{ maxWidth: '300px' }} />
+            <button className="btn-purple" onClick={startMobileCapture}>📱 Capture on Mobile</button>
           </div>
 
           {room && (
             <div className="mobile-box">
-              <div>
-                <p><b>Scan with your phone camera:</b></p>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Scan with your phone:</p>
                 <img src={qrSrc} alt="QR" className="qr" />
-                <p className="muted small">Or open on phone: <code>{phoneUrl}</code></p>
-                <p>Phone: {phoneConnected ? '🟢 connected' : '⚪ waiting…'} — open the page on phone to auto-connect.</p>
               </div>
-              <div className="muted small">
-                Tap <b>Send Photo</b> on the phone — the laptop will update <b>without refreshing</b>.
+              <div className="muted">
+                <p>📱 Tap <b>Send Photo</b> on the phone.</p>
+                <p>💻 The laptop will update <b>without refreshing</b>.</p>
+                <p>Status: {phoneConnected ? '🟢 connected' : '⚪ waiting…'}</p>
               </div>
             </div>
           )}
 
-          {status && <p className="status">{status}</p>}
+          {status && <p style={{ color: 'var(--primary)', fontWeight: 600, marginTop: '16px' }}>{status}</p>}
 
           {annotated && (
-            <div className="preview">
+            <div className="preview" style={{ marginTop: '24px' }}>
               <h3>Annotated Preview</h3>
               <img src={annotated} alt="preview" />
             </div>
           )}
 
-          <h3>Roster</h3>
+          <h3 style={{ marginTop: '32px' }}>Roster</h3>
           <table>
             <thead>
               <tr>
@@ -167,22 +161,22 @@ export default function Attendance() {
             <tbody>
               {roster.map(r => (
                 <tr key={r.student_id}>
-                  <td>{r.roll_no}</td>
+                  <td><b>{r.roll_no}</b></td>
                   <td>{r.full_name}</td>
-                  <td className={`st-${r.status}`}>{r.status}</td>
+                  <td><span className={`badge st-${r.status}`}>{r.status}</span></td>
                   <td>{r.match_score?.toFixed?.(3) ?? '—'}</td>
-                  <td>
-                    <button onClick={() => setStatusRow(r.student_id, 'PRESENT')}>P</button>
-                    <button onClick={() => setStatusRow(r.student_id, 'ABSENT')}>A</button>
-                    <button onClick={() => setStatusRow(r.student_id, 'UNMARKED')}>U</button>
+                  <td style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={() => setStatusRow(r.student_id, 'PRESENT')} style={{ padding: '6px 12px', background: 'var(--success)' }}>P</button>
+                    <button onClick={() => setStatusRow(r.student_id, 'ABSENT')} style={{ padding: '6px 12px', background: 'var(--danger)' }}>A</button>
+                    <button onClick={() => setStatusRow(r.student_id, 'UNMARKED')} style={{ padding: '6px 12px', background: 'var(--warning)' }}>U</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className="row">
-            <button onClick={doSave}>✅ Save & Approve</button>
+          <div className="row" style={{ marginTop: '32px' }}>
+            <button className="btn-success" onClick={doSave}>✅ Save & Approve</button>
             <a href={exportUrl(session.id)} target="_blank" rel="noreferrer">
               <button>⬇️ Export Excel</button>
             </a>
