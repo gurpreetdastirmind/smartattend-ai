@@ -37,14 +37,17 @@ export default function Classes() {
     <div className="grid2">
       <div className="card">
         <h2>Classes</h2>
+        <p className="muted small">Create and manage your classes here.</p>
+        
         <form onSubmit={addCls} className="row">
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Class name (e.g. AI Workshop A)" />
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Class name (e.g. AI Workshop A)" style={{ flex: 1 }} />
           <button>Add Class</button>
         </form>
+        
         <ul className="list">
           {classes.map(c => (
             <li key={c.id} className={sel?.id === c.id ? 'selected' : ''} onClick={() => setSel(c)}>
-              {c.name} <span className="muted">#{c.id}</span>
+              <b>{c.name}</b> <span className="muted" style={{ float: 'right' }}>ID: #{c.id}</span>
             </li>
           ))}
         </ul>
@@ -52,12 +55,13 @@ export default function Classes() {
 
       <div className="card">
         <h2>Students {sel ? `— ${sel.name}` : ''}</h2>
-        {!sel && <p className="muted">Select a class</p>}
+        {!sel && <p className="muted">Select a class on the left to view students.</p>}
+        
         {sel && (
           <>
             <form onSubmit={addStu} className="row">
-              <input value={roll} onChange={e => setRoll(e.target.value)} placeholder="Roll No" />
-              <input value={full} onChange={e => setFull(e.target.value)} placeholder="Full Name" />
+              <input value={roll} onChange={e => setRoll(e.target.value)} placeholder="Roll No" style={{ width: '100px' }} />
+              <input value={full} onChange={e => setFull(e.target.value)} placeholder="Full Name" style={{ flex: 1 }} />
               <button>Add Student</button>
             </form>
             <table>

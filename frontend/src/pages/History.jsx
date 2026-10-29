@@ -14,26 +14,27 @@ export default function History() {
 
   return (
     <div className="card">
-      <h2>Attendance History</h2>
+      <h2>Attendance Reports</h2>
+      <p className="muted">View session history and student attendance records.</p>
       
-      <div className="row">
-        <label>Select Class:</label>
+      <div className="row" style={{ marginTop: '24px' }}>
+        <label>Filter by Class:</label>
         <select value={sel?.id || ''} onChange={e => setSel(classes.find(c => c.id === +e.target.value))}>
-          <option value="">— select —</option>
+          <option value="">— select class —</option>
           {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
-      {sel && history.length === 0 && <p className="muted">No sessions recorded yet for this class.</p>}
+      {sel && history.length === 0 && <p className="muted" style={{ marginTop: '24px' }}>No sessions recorded yet for this class.</p>}
 
       {history.map(session => (
-        <div key={session.session_id} style={{ marginTop: '20px', padding: '15px', background: '#0f172a', borderRadius: '8px' }}>
-          <h3 style={{ marginTop: 0, color: '#93c5fd' }}>
+        <div key={session.session_id} style={{ marginTop: '24px', padding: '24px', background: 'var(--bg-input)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <h3 style={{ marginTop: 0, color: 'var(--primary)' }}>
             📅 {session.date} {session.subject ? `— ${session.subject}` : ''}
           </h3>
           <table>
             <thead>
-              <tr><th>Roll</th><th>Name</th><th>Status</th></tr>
+              <tr><th>Roll No</th><th>Student Name</th><th>Status</th></tr>
             </thead>
             <tbody>
               {session.records.map(r => (
